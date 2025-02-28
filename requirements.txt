@@ -1,0 +1,11 @@
+numpy==1.26.4
+pandas
+scikit-learn
+matplotlib
+seaborn
+networkx
+nltk
+torch==2.2.0
+torchtext
+spacy
+tokenizers
