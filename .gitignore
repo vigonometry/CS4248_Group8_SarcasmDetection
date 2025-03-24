@@ -3,3 +3,4 @@
 .ipynb_checkpoints
 **/.DS_Store
 data/embeddings_count_tfidf.csv
+data/embeddings_nltk.csv
