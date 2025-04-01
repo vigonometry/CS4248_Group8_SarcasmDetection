@@ -61,6 +61,61 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 X_train, X_test, y_train, y_test = X_train.to(device), X_test.to(device), y_train.to(device), y_test.to(device)
 
+# Define the unidirectional LSTM model
+class UniRNN(nn.Module):
+    def __init__(self, input_size=100, hidden_size=128, num_layers=2, dropout=0.2):
+        super(UniRNN, self).__init__()
+        self.lstm = nn.LSTM(
+            input_size=input_size,
+            hidden_size=hidden_size,
+            num_layers=num_layers,
+            batch_first=True,
+            dropout=dropout if num_layers > 1 else 0
+        )
+        self.dropout = nn.Dropout(dropout)
+        self.fc = nn.Linear(hidden_size, 1)
+        
+    def forward(self, x):
+        # x shape: (batch_size, seq_length, input_size)
+        lstm_out, (hidden, _) = self.lstm(x)
+        # Take the output from the last time step
+        out = hidden[-1, :, :]  # Shape: (batch_size, hidden_size)
+        out = self.dropout(out)
+        out = self.fc(out)
+        return torch.sigmoid(out)
+
+# Define the bidirectional LSTM model
+class BiRNN(nn.Module):
+    def __init__(self, input_size=100, hidden_size=128, num_layers=2, dropout=0.2):
+        super(BiRNN, self).__init__()
+        self.lstm = nn.LSTM(
+            input_size=input_size,
+            hidden_size=hidden_size,
+            num_layers=num_layers,
+            batch_first=True,
+            bidirectional=True,
+            dropout=dropout if num_layers > 1 else 0
+        )
+        self.dropout = nn.Dropout(dropout)
+        # Note: hidden_size * 2 because of bidirectional
+        self.fc = nn.Linear(hidden_size * 2, 1)
+        
+    def forward(self, x):
+        # x shape: (batch_size, seq_length, input_size)
+        lstm_out, (hidden, _) = self.lstm(x)
+        
+        # In bidirectional LSTM, hidden contains both forward and backward final states
+        # Concatenate the final states from both directions
+        # hidden shape: (num_layers * num_directions, batch_size, hidden_size)
+        # We want the last layer's hidden state for both directions
+        forward = hidden[-2, :, :]  # Shape: (batch_size, hidden_size)
+        backward = hidden[-1, :, :]  # Shape: (batch_size, hidden_size)
+        out = torch.cat((forward, backward), dim=1)  # Shape: (batch_size, hidden_size*2)
+        
+        out = self.dropout(out)
+        out = self.fc(out)
+        return torch.sigmoid(out)
+
 # Training function
 def train_model(model, X_train, y_train, X_val, y_val, criterion, optimizer, num_epochs=10, batch_size=64):
     train_losses = []
@@ -146,95 +201,41 @@ def evaluate_model(model, X_test, y_test):
     
     return accuracy, y_pred
 
-# Define the unidirectional vanilla RNN model
-class UniVanillaRNN(nn.Module):
-    def __init__(self, input_size=100, hidden_size=128, num_layers=2, dropout=0.2):
-        super(UniVanillaRNN, self).__init__()
-        self.rnn = nn.RNN(
-            input_size=input_size,
-            hidden_size=hidden_size,
-            num_layers=num_layers,
-            batch_first=True,
-            dropout=dropout if num_layers > 1 else 0
-        )
-        self.dropout = nn.Dropout(dropout)
-        self.fc = nn.Linear(hidden_size, 1)
-        
-    def forward(self, x):
-        # x shape: (batch_size, seq_length, input_size)
-        _, hidden = self.rnn(x)
-        # Take the output from the last layer
-        out = hidden[-1, :, :]  # Shape: (batch_size, hidden_size)
-        out = self.dropout(out)
-        out = self.fc(out)
-        return torch.sigmoid(out)
-
-# Define the bidirectional vanilla RNN model
-class BiVanillaRNN(nn.Module):
-    def __init__(self, input_size=100, hidden_size=128, num_layers=2, dropout=0.2):
-        super(BiVanillaRNN, self).__init__()
-        self.rnn = nn.RNN(
-            input_size=input_size,
-            hidden_size=hidden_size,
-            num_layers=num_layers,
-            batch_first=True,
-            bidirectional=True,
-            dropout=dropout if num_layers > 1 else 0
-        )
-        self.dropout = nn.Dropout(dropout)
-        # Note: hidden_size * 2 because of bidirectional
-        self.fc = nn.Linear(hidden_size * 2, 1)
-        
-    def forward(self, x):
-        # x shape: (batch_size, seq_length, input_size)
-        _, hidden = self.rnn(x)
-        
-        # In bidirectional RNN, hidden contains both forward and backward final states
-        # For vanilla RNN, we need to handle the bidirectional outputs differently than LSTM
-        # The last two layers contain the final forward and backward hidden states
-        forward = hidden[-2, :, :]  # Shape: (batch_size, hidden_size)
-        backward = hidden[-1, :, :]  # Shape: (batch_size, hidden_size)
-        out = torch.cat((forward, backward), dim=1)  # Shape: (batch_size, hidden_size*2)
-        
-        out = self.dropout(out)
-        out = self.fc(out)
-        return torch.sigmoid(out)
-
-# Initialize vanilla RNN models
-print("Initializing vanilla RNN models...")
+# Initialize models
+print("Initializing models...")
 input_size = 100  # Word2Vec embedding dimension
 hidden_size = 128
 
-# Unidirectional vanilla RNN
-uni_vanilla_rnn = UniVanillaRNN(input_size, hidden_size).to(device)
+# Unidirectional LSTM
+uni_rnn = UniRNN(input_size, hidden_size).to(device)
 criterion = nn.BCELoss()
-optimizer = optim.Adam(uni_vanilla_rnn.parameters(), lr=0.001)
+optimizer = optim.Adam(uni_rnn.parameters(), lr=0.001)
 
-# Train unidirectional vanilla RNN
-print("\nTraining Unidirectional Vanilla RNN...")
-uni_vanilla_rnn, uni_train_losses, uni_val_losses, uni_train_accs, uni_val_accs = train_model(
-    uni_vanilla_rnn, X_train, y_train, X_test, y_test, criterion, optimizer, num_epochs=10, batch_size=64
+# Train unidirectional 
+print("\nTraining Unidirectional LSTM...")
+uni_rnn, uni_train_losses, uni_val_losses, uni_train_accs, uni_val_accs = train_model(
+    uni_rnn, X_train, y_train, X_test, y_test, criterion, optimizer, num_epochs=10, batch_size=64
 )
 
-# Evaluate unidirectional vanilla RNN
-print("\nEvaluating Unidirectional Vanilla RNN...")
-uni_accuracy, uni_predictions = evaluate_model(uni_vanilla_rnn, X_test, y_test)
+# Evaluate unidirectional LSTM
+print("\nEvaluating Unidirectional LSTM...")
+uni_accuracy, uni_predictions = evaluate_model(uni_rnn, X_test, y_test)
 
-# Bidirectional vanilla RNN
-bi_vanilla_rnn = BiVanillaRNN(input_size, hidden_size).to(device)
-optimizer = optim.Adam(bi_vanilla_rnn.parameters(), lr=0.001)
+# Bidirectional LSTM
+bi_rnn = BiRNN(input_size, hidden_size).to(device)
+optimizer = optim.Adam(bi_rnn.parameters(), lr=0.001)
 
-# Train bidirectional vanilla RNN
-print("\nTraining Bidirectional Vanilla RNN...")
-bi_vanilla_rnn, bi_train_losses, bi_val_losses, bi_train_accs, bi_val_accs = train_model(
-    bi_vanilla_rnn, X_train, y_train, X_test, y_test, criterion, optimizer, num_epochs=10, batch_size=64
+# Train bidirectional LSTM
+print("\nTraining Bidirectional LSTM...")
+bi_rnn, bi_train_losses, bi_val_losses, bi_train_accs, bi_val_accs = train_model(
+    bi_rnn, X_train, y_train, X_test, y_test, criterion, optimizer, num_epochs=10, batch_size=64
 )
 
-# Evaluate bidirectional vanilla RNN
-print("\nEvaluating Bidirectional Vanilla RNN...")
-bi_accuracy, bi_predictions = evaluate_model(bi_vanilla_rnn, X_test, y_test)
+# Evaluate bidirectional LSTM
+print("\nEvaluating Bidirectional LSTM...")
+bi_accuracy, bi_predictions = evaluate_model(bi_rnn, X_test, y_test)
 
 # Compare models
 print("\nModel Comparison:")
-print(f"Unidirectional Vanilla RNN Accuracy: {uni_accuracy:.4f}")
-print(f"Bidirectional Vanilla RNN Accuracy: {bi_accuracy:.4f}")
+print(f"Unidirectional LSTM Accuracy: {uni_accuracy:.4f}")
+print(f"Bidirectional LSTM Accuracy: {bi_accuracy:.4f}")
