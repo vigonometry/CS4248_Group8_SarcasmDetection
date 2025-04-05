@@ -23,17 +23,21 @@ def gen_adj_matrix(text):
     return matrix
 
 def safe_literal_eval(val):
-    if isinstance(val, str) and val != 'nan':
-        try:
-            return ast.literal_eval(val)
-        except (ValueError, SyntaxError):
-            return []  # Return an empty list in case of an invalid string
-    return []  # Return an empty list for NaN or non-string values
+    """Safely convert string representations of lists into actual lists."""
+    try:
+        result = ast.literal_eval(val)
+        return result if isinstance(result, list) else val
+    except (ValueError, SyntaxError):
+        return val  # If conversion fails, return the original value
 
 def process_adj_matrix(filename, col, export_file_name):
     fin = pd.read_csv(filename)
     fin[col] = fin[col].apply(safe_literal_eval)  # Apply the safe literal eval function
-    fin['text'] = fin[col].apply(lambda x: ' '.join(x) if isinstance(x, list) else '')  # Handle case where x might not be a list
+    if fin[col].apply(lambda x: isinstance(x, list)).all():
+        fin["text"] = fin[col].apply(lambda x: " ".join(x) if isinstance(x, list) else "")
+    else:
+        fin['text'] = fin[col]
+    print(fin['text'][:2])
     lines = fin['text'].tolist()
     #lines = fin.readlines()
     #fin.close()
