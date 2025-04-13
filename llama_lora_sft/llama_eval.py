@@ -3,7 +3,7 @@ import argparse
 import pandas as pd
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 
-model = 'mistral12B'
+model = 'mistral7B'
 
 def load_jsonl(file_path):
     data = []
