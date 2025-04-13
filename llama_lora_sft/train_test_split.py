@@ -13,5 +13,9 @@ def train_test_split(data: pd.DataFrame, test_size):
     train.to_json('train.jsonl', orient='records', lines=True)
     test.to_json('test.jsonl', orient='records', lines=True)
     
-df = pd.read_csv('data/raw.csv')
+def modify_df(df: pd.DataFrame):
+    df['is_sarcastic'] = df['is_sarcastic'].map(lambda x: 'sarcastic' if x == 1 else 'not_sarcastic')
+    
+df = pd.read_csv('../data/raw.csv')
+modify_df(df)
 train_test_split(df, test_size=0.2)

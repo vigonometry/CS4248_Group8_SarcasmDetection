@@ -3,18 +3,20 @@ import argparse
 import pandas as pd
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 
+model = 'mistral7B'
+
 def load_jsonl(file_path):
     data = []
     with open(file_path, 'r', encoding='utf-8') as file:
         for line in file:
             data.append(json.loads(line))
     df = pd.DataFrame(data)
-    df.to_csv('llama/predictions_llama.csv', index=False)
+    df.to_csv(f'llama_lora_sft\predictions_{model}.csv', index=False)
     return pd.DataFrame(data)
 
 def calculate_metrics(df):
-    y_true = df['is_sarcastic'].apply(lambda x: str(x).lower() == '1').astype(int)
-    y_pred = df['prediction'].apply(lambda x: str(x).lower() == '1').astype(int)
+    y_true = df['is_sarcastic'].apply(lambda x: str(x).lower()[0] == 's').astype(int)
+    y_pred = df['prediction'].apply(lambda x: str(x).lower()[0] == 's').astype(int)
     
     # print(y_true)
     
@@ -45,7 +47,7 @@ def calculate_metrics(df):
     }
 
 def main():
-    file_path = 'llama/predictions_llama.jsonl'
+    file_path = f'llama_lora_sft/predictions_{model}.jsonl'
     
     df = load_jsonl(file_path)
     metrics = calculate_metrics(df)
